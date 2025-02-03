@@ -1,4 +1,2 @@
 [deps]
 Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
-KirchhoffForests = "e81499c0-f9dc-443f-84b6-a65cdedd22fa"
-ProfileView = "c46f51b8-102a-5cf2-8d2c-8597cb0e0da7"

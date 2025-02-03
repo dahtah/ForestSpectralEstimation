@@ -4,4 +4,4 @@ This repository contains research code for spectral estimation using Kirchhoff f
 
 Authors: Simon Barthelmé, Alexandre Gaudillière, Nicolas Tremblay. 
 
-See demo/demo.jl 
+See demo/setup.jl and demo/demo.jl 

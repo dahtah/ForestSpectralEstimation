@@ -1,5 +1,9 @@
+
 using Plots,Graphs,LinearAlgebra,Statistics
 import ForestSpectralEstimation as FSE
+
+
+
 
 function demo(g;exact=:false,nqs=30,nm=4,nrep=10,n_max_exact=5000)
     #Default range is logarithmic on .05*d_bar to 4*dbar
