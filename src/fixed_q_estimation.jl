@@ -36,8 +36,8 @@ function range_q(g,q)
 end
 
 function chebbounds_fixedq(y,a,b)
-    #This returns a Chebyshev-Krein bound for the cdf at 0.5
-    cb = cheb_bound_dual([1;y],.5,a=a,b=b)
+    #This returns a Markov-Krein bound for the cdf at 0.5
+    cb = markov_bound_dual([1;y],.5,a=a,b=b)
     lw=1-cb[2] #we need p(z >= 1/2), reverse
     up=1-cb[1]
     (lw,up)
