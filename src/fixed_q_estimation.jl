@@ -35,9 +35,9 @@ function range_q(g,q)
     (q/(q+bound_lambda(g)),1.0)
 end
 
-function chebbounds_fixedq(y,a,b)
+function bounds_fixedq(y,a,b)
     #This returns a Markov-Krein bound for the cdf at 0.5
-    cb = markov_bound_dual([1;y],.5,a=a,b=b)
+    cb = markov_bound([1;y],.5,a,b)
     lw=1-cb[2] #we need p(z >= 1/2), reverse
     up=1-cb[1]
     (lw,up)
@@ -96,21 +96,42 @@ function collect_moments(g;qs=default_range(g),nm=4,nrep=10)
     (qs=qs,moments=moments)
 end
 
+#Denoise and truncate if denoised moments are too far from empirical mean
+function adaptive_denoising(y,v;a=-1.,b=1.)
+    n = length(y)
+    w = [1; 1 ./ v] #Weigths to use in weighted LS denoising
+    while n > 1
+        yt = denoise([1;y[1:n]],a=a,b=b,w=w[1:(n+1)])[2:end]
+        res = (yt - y[1:n]) ./ sqrt.(v[1:n])
+        if (all(abs.(res) .< .5)) && is_admissible([1;yt],a,b)
+            return yt
+        else
+            n = n-1
+        end
+    end
+    return y[1]
+end
 
 #Given a sequence of moments at q_1 ... q_m
 #try to reconstruct the cdf 
-function reconstruct(qs,moments,g)
+function reconstruct(qs,moments,g;method=:truncate)
     me = zeros(length(qs)) 
     lw = zeros(length(qs))
     up = zeros(length(qs))
     for i in 1:length(qs)
         q = qs[i]
         a,b=range_q(g,q)
-        #Truncate the moments
         y,v = moments[i]
-        yt=truncate_moments_alex(y,v,a=a,b=b)
-        m = length(yt) #number of remaining moments
-        lw[i],up[i]=chebbounds_fixedq(yt,a,b)
+        if method == :project #add denoising 
+            yn=denoise([1;y],a=a,b=b)
+            yt=admissible_subset(yn,a,b)[2][2:end]
+        elseif method == :adaptive
+            yt=adaptive_denoising(y,v,a=a,b=b)
+        elseif method == :truncate
+            yt=truncate_moments_alex(y,v,a=a,b=b)
+        end
+        m = length(yt)
+        lw[i],up[i]=bounds_fixedq(yt,a,b)
         me[i] = maxent_fixedq(yt,v[1:m],a,b).prop
     end
     (qs=qs,maxent=me,lw=lw,up=up)

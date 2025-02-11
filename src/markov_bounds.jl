@@ -1,10 +1,11 @@
+#DO NOΤ USΕ THIS
+#Only useful to check output of markov_bound
+#It's much slower and less stable
+
 #Some functions for computing generalised Markov bounds
 #Given a moment sequence s_0, s_1 ..., s_k
 #find bounds on μ([a,x])
 #for any measure on [a,b] with moment sequence s.
-#NB: theoretically this could all be implemented using quadratures but
-#the Krein & Nudelman book is inscrutable on the specifics.
-#Here we use an approximation of the dual problem that seems to work well enough for low degrees
 
 using JuMP
 import Hypatia

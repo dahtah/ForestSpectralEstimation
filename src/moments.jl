@@ -98,7 +98,7 @@ function admissible_subset(s,a=-1.0,b=1.0)
             k -= 1
         end
     end
-    k,s[1:k]
+   return (k,s[1:k])
 end
 
 #Given a moment sequence under a measure μ, transform to a moment sequence
@@ -142,8 +142,8 @@ function gaussquad_from_moments(s)
     λ,U[1,:].^2
 end
 
-function vdm(x)
-    [x^i for x in x, i in 0:(length(x)-1)]
+function vdm(x,deg=length(x)-1)
+    [x^i for x in x, i in 0:deg]
 end
 
 function lower_representation(s,a=-1.,b=1.)
@@ -156,7 +156,6 @@ function lower_representation(s,a=-1.,b=1.)
         sp = transformed_sequence(s,:a,a,b)
         #compute inner nodes
         x=roots_from_moments(sp)
-        @show length(x)
         #solve VdM system
         w = (vdm([a;x])') \ s[1:(length(x)+1)]
         ([a;x],w)
@@ -182,22 +181,67 @@ function upper_representation(s,a=-1.,b=1.)
     end
 end
 
+function kernel_roots(C,α,ξ)
+    Vs = [Poly.Polynomial(C[:,i])/sqrt(α[i]) for i in 1:size(C,1)]
+    Vv = [v(ξ) for v in Vs]
+    Q = sum([Vs[i]*Vv[i] for i in 1:length(Vv)])
+    Poly.roots(Q)
+    #Q
+end
+
+#Compute moments of a quadrature rule 
+function moments_qr(x,w,deg)
+    [dot(w,x.^j) for j in 0:deg]
+end
+
+#Find quadrature weights given a set of nodes
+function fit_quadweights(x,s)
+    V=vdm(x,length(s)-1)
+    w = V' \ s
+    valid = all(w .>= 0) && (V'*w ≈ s)
+    return (w=w,valid=valid)
+end
+
+#Markov bound for μ([a,ξ]) based on moment sequence s
+function markov_bound(s,ξ,a=-1.,b=1.)
+    x,w=canonical_representation(s,ξ,a,b)
+    lw = sum(w[x .< ξ])
+    up = sum(w[x .<= ξ])
+    (lw,up)
+end
+
 function canonical_representation(s,ξ,a=-1.,b=1.)
     n = length(s)
-    if iseven(n)
+    if isodd(n)
         sp = transformed_sequence(s,:ab,a,b)
-        #compute inner nodes
-        x = roots_from_moments(sp)
-        #solve VdM system
-        w = (vdm([a;x;b])') \ s[1:(length(x)+2)]
-        ([a;x;b],w)
+        C,α=monic_orth_poly(sp)
+        x=[a;kernel_roots(C,α,ξ);ξ;b]
+        w,valid=fit_quadweights(x,s)
+        if (valid)
+
+            return x,w
+        else
+            C,α=monic_orth_poly(s)
+            x=[kernel_roots(C,α,ξ);ξ]
+            w,valid=fit_quadweights(x,s)
+            @assert valid
+            return x,w
+        end
     else
-        sp = transformed_sequence(s,:b,a,b)
-        #compute inner nodes
-        x = roots_from_moments(sp)
-        #solve VdM system
-        w = (vdm([x;b])') \ s[1:(length(x)+1)]
-        ([x;b],w)
+        sp = transformed_sequence(s,:a,a,b)
+        C,α=monic_orth_poly(sp)
+        x=[a;kernel_roots(C,α,ξ);ξ]
+        w,valid=fit_quadweights(x,s)
+        if (valid) #Found a valid solution
+            return x,w
+        else
+            sp = transformed_sequence(s,:b,a,b)
+            C,α=monic_orth_poly(sp)
+            x=[kernel_roots(C,α,ξ);b;ξ]
+            w,valid=fit_quadweights(x,s)
+            @assert valid
+            return x,w
+        end
     end
 end
 
@@ -268,7 +312,36 @@ function monic_orth_poly(s)
     (R=OffsetArrays.no_offset_view(C),α=OffsetArrays.no_offset_view(α))
 end
 
+#Roots of the last monic orth polynomial computable from moment sequence s
 function roots_from_moments(s)
     R,_ = monic_orth_poly(s)
     Poly.roots(Poly.Polynomial(R[:,end]))
+end
+
+#Given the moments s of random variable x, find the moments
+#of α*(x+β)
+function rescale_moment_sequence(s,α,β)
+    deg = length(s)-1
+    s = OffsetArrays.Origin(0)(s)
+    st = copy(s)
+    for i in 0:deg
+        v = 0.0
+        for j in 0:i
+            v+= binomial(i,j)*s[j]*β^(i-j)
+        end
+        st[i] = (α^i ) * v
+    end
+    OffsetArrays.no_offset_view(st)
+end
+
+#Moments of the uniform distribution on [-1,1]
+function legendre_moments(deg)
+    [iseven(i)/(i+1) for i in 0:deg]
+end
+
+#Moments of the uniform distribution on [a,b]
+function uniform_moments(deg,a=-1.,b=1.)
+    s = legendre_moments(deg)
+    r = (b-a)/2
+    rescale_moment_sequence(s,r,1+2a/(b-a))
 end

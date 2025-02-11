@@ -7,6 +7,7 @@ include("exp_family.jl")
 
 include("moments.jl")
 include("markov_bounds.jl")
+include("denoise.jl")
 include("fixed_q_estimation.jl")
 include("isotonic.jl")
 end # module ForestSpectralEstimation
