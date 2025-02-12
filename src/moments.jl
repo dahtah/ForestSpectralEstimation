@@ -204,10 +204,16 @@ end
 
 #Markov bound for μ([a,ξ]) based on moment sequence s
 function markov_bound(s,ξ,a=-1.,b=1.)
-    x,w=canonical_representation(s,ξ,a,b)
-    lw = sum(w[x .< ξ])
-    up = sum(w[x .<= ξ])
-    (lw,up)
+    if ξ == a
+        return (0.0,0.0)
+    elseif ξ == b
+        return (1.0,1.0)
+    else
+        x,w=canonical_representation(s,ξ,a,b)
+        lw = sum(w[x .< ξ])
+        up = sum(w[x .<= ξ])
+        (lw,up)
+    end
 end
 
 function canonical_representation(s,ξ,a=-1.,b=1.)
