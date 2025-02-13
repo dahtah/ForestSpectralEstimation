@@ -92,7 +92,7 @@ end
 function admissible_subset(s,a=-1.0,b=1.0)
     k = length(s)
     while k > 0
-        if is_admissible(s[1:k])
+        if is_admissible(s[1:k],a,b)
             break
         else
             k -= 1

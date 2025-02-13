@@ -156,8 +156,12 @@ end
 
 #Find a maximum entropy distribution that falls within the confidence bounds
 #Uses Newton's method, stopping when we reach the confidence ball
-function maxent_confidence(ef,μ,std_err;η0 = zeros(length(μ)),step_size=1.0,maxiter=100,max_ls=30)
+function maxent_confidence(ef,μ,std_err;η0 = zeros(length(μ)),step_size=1.0,maxiter=100,max_ls=300)
     m = length(μ)
+    # if η0 != zeros(length(μ))
+    #     @info "Warm-starting"
+    #     @show η0
+    # end
     η = η0
     ind_iter=0
 

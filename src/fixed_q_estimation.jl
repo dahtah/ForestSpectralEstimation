@@ -44,7 +44,10 @@ function bounds_fixedq(y,a,b)
 end
 
 
-function maxent_fixedq(y,v,a,b)
+function maxent_fixedq(y,v,a,b;η0=zeros(length(y)))
+    @assert length(η0) == length(y)
+    @assert length(v) == length(y)
+
     #For compatibility with the ExpFamily struct,
     #we need to map our variable from the interval [a,b]
     #to the interval [-1,1]
@@ -55,9 +58,9 @@ function maxent_fixedq(y,v,a,b)
     ef = ExpFamily((v)->[itr(v)^i for i in 1:m])
     #Find max. entropy estimates 
     try
-        res=maxent_confidence(ef,y,sqrt.(v[1:m]))
+        res=maxent_confidence(ef,y,sqrt.(v),η0=η0)
         return (prop=expectation(res.ed,(v)-> itr(v) > 0.5),ed=res.ed,status=:success)
-    catch #Optim. failed
+    catch err
         return (prop=NaN,ef=ef,status=:failure)  
     end
 end
@@ -100,10 +103,13 @@ end
 function adaptive_denoising(y,v;a=-1.,b=1.)
     n = length(y)
     w = [1; 1 ./ v] #Weigths to use in weighted LS denoising
+    if is_admissible([1;y[1:n]],a,b)
+        return y
+    end
     while n > 1
         yt = denoise([1;y[1:n]],a=a,b=b,w=w[1:(n+1)])[2:end]
         res = (yt - y[1:n]) ./ sqrt.(v[1:n])
-        if (all(abs.(res) .< .5)) && is_admissible([1;yt],a,b)
+        if (all(abs.(res) .< 2)) && is_admissible([1;yt],a,b)
             return yt
         else
             n = n-1
@@ -113,26 +119,46 @@ function adaptive_denoising(y,v;a=-1.,b=1.)
 end
 
 #Given a sequence of moments at q_1 ... q_m
-#try to reconstruct the cdf 
-function reconstruct(qs,moments,g;method=:truncate)
+#try to reconstruct the cdf
+#Returns: me Max. entropy estimate
+#lw,up Markov bounds
+#nm Number of moments used at each q_i
+function reconstruct(qs,moments,g;method=:truncate,warm_start=false)
     me = zeros(length(qs)) 
     lw = zeros(length(qs))
     up = zeros(length(qs))
+    nm = zeros(length(qs)) #number of moments used
+    #This is used for warm-starting the max. entropy optim.
+    η0 = zeros(maximum([length(m.y) for m in moments]))
     for i in 1:length(qs)
         q = qs[i]
         a,b=range_q(g,q)
         y,v = moments[i]
-        if method == :project #add denoising 
+        if method == :project #denoise naively, then keep admissible subset
             yn=denoise([1;y],a=a,b=b)
             yt=admissible_subset(yn,a,b)[2][2:end]
         elseif method == :adaptive
+            #denoise, taking measurement variance into account
             yt=adaptive_denoising(y,v,a=a,b=b)
         elseif method == :truncate
+            #Alex's method
             yt=truncate_moments_alex(y,v,a=a,b=b)
         end
         m = length(yt)
+        nm[i] = m
         lw[i],up[i]=bounds_fixedq(yt,a,b)
-        me[i] = maxent_fixedq(yt,v[1:m],a,b).prop
+        δ= up[i]-lw[i]
+        if δ > 1e-3
+            res_me = maxent_fixedq(yt,v[1:m],a,b;η0=η0[1:m])
+            me[i] = res_me.prop
+            if isfinite(me[i]) && warm_start
+                #η0[1:3] .= res_me.ed.β[1:3]
+                η0[1:m] .= res_me.ed.β[1:m]
+                # η0[(m+1):end] .= 0
+            end
+        else
+            me[i] = (up[i]+lw[i])/2
+        end
     end
-    (qs=qs,maxent=me,lw=lw,up=up)
+    (qs=qs,maxent=me,lw=lw,up=up,nm=nm)
 end
