@@ -61,6 +61,8 @@ function maxent_fixedq(y,v,a,b;η0=zeros(length(y)))
         res=maxent_confidence(ef,y,sqrt.(v),η0=η0)
         return (prop=expectation(res.ed,(v)-> itr(v) > 0.5),ed=res.ed,status=:success)
     catch err
+        @info "Caught error in max. entropy computation"
+        showerror(stdout,err)
         return (prop=NaN,ef=ef,status=:failure)  
     end
 end
@@ -136,7 +138,7 @@ function reconstruct(qs,moments,g;method=:truncate,warm_start=false)
         y,v = moments[i]
         if method == :project #denoise naively, then keep admissible subset
             yn=denoise([1;y],a=a,b=b)
-            yt=admissible_subset(yn,a,b)[2][2:end]
+            yt=admissible_subset(yn,a,b)[2:end]
         elseif method == :adaptive
             #denoise, taking measurement variance into account
             yt=adaptive_denoising(y,v,a=a,b=b)

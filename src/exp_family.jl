@@ -69,6 +69,35 @@ function compute_var(ef :: ExpFamily, β)
     (ef.S' * W * ef.S) - m*m'
 end
 
+#A (hopefully) more stable way to compute a Newton update
+#This avoids taking the Cholesky decomposition of the covariance matrix
+#which can be very ill-conditioned
+#Instead, we run QR on basis functions rescaled by density
+function compute_newton_update(ef :: ExpFamily, β,μ)
+    m = compute_moments(ef,β)
+    W = Diagonal(softmax(ef.S*β + log.(ef.w)))
+    R=qr(sqrt(W)*ef.S).R
+    #H=(ef.S' * W * ef.S)# - m*m'
+    #cholesky(Symmetric(compute_var(ef,β)))\( m - μ)
+    #Symmetric(compute_var(ef,β)) \ ( m - μ)
+    #Symmetric(compute_var(ef,β)) \ ( m - μ)
+    #(H-m*m')\(m - μ)
+    #H  = R'*R
+#    c= H\m
+     c = R \ (R' \ m)
+    # a=(inv(H)+(c*c')/(1-dot(m,c)))*(m-μ)
+     b= R \ (R' \ (m-μ)) +  (c*dot(c,m-μ))/(1-dot(m,c))
+    # b
+    #a,b
+end
+
+#     # W = Diagonal(sqrt.(softmax(ef.S*β + log.(ef.w))))
+#     # qr(W*ef.S).R
+#     #(ef.S' * W * ef.S) - m*m'
+# end
+
+
+
 function compute_entropy(ef::ExpFamily,β)
     f = ef.S*β
     g = exp.(f)
@@ -175,10 +204,12 @@ function maxent_confidence(ef,μ,std_err;η0 = zeros(length(μ)),step_size=1.0,m
         if norm(res) < 1
             break
         end
-        g = ed.μ-μ
-        C=cholesky(Symmetric(cov_ss(ed)))
+        #g = ed.μ-μ
+        #C=cholesky(Symmetric(cov_ss(ed)))
         α = step_size
-        δ = C\g
+        #δ = C\g
+        δ = compute_newton_update(ef,η,μ)
+        #@show norm(δ-δ2)
         c0 = cfun(η)
         ind_ls = 0
         while (cfun(η-α*δ) > c0) && (ind_ls < max_ls)

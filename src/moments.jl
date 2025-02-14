@@ -98,7 +98,7 @@ function admissible_subset(s,a=-1.0,b=1.0)
             k -= 1
         end
     end
-   return (k,s[1:k])
+   return s[1:k]
 end
 
 #Given a moment sequence under a measure μ, transform to a moment sequence

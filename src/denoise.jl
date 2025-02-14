@@ -18,8 +18,10 @@ function denoise(s;a=-1.,b=1.,force_s0=true,w=ones(length(s)))
     @variable(model,X[1:sX,1:sX],PSD)
     @variable(model,Y[1:sY,1:sY],PSD)
     @variable(model,z[1:length(s)])
-    D = Diagonal(w)
-    @objective(model,Min,(z-s)'*D*(z-s))
+    #D = Diagonal(w)
+    
+    D = Diagonal(normalize(sqrt.(w),1))
+    @objective(model,Min,sum(abs2.(D*(z-s))))
     if force_s0
         @constraint(model, z[1] == s[1])
     end
