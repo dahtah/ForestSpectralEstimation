@@ -151,12 +151,11 @@ function reconstruct(qs,moments,g;method=:truncate,warm_start=false)
         lw[i],up[i]=bounds_fixedq(yt,a,b)
         δ= up[i]-lw[i]
         if δ > 1e-3
-            res_me = maxent_fixedq(yt,v[1:m],a,b;η0=η0[1:m])
+#            res_me = maxent_fixedq(yt,v[1:m],a,b;η0=η0[1:m])
+            res_me = maxent_fixedq(yt,v[1:m],a,b)
             me[i] = res_me.prop
             if isfinite(me[i]) && warm_start
-                #η0[1:3] .= res_me.ed.β[1:3]
                 η0[1:m] .= res_me.ed.β[1:m]
-                # η0[(m+1):end] .= 0
             end
         else
             me[i] = (up[i]+lw[i])/2

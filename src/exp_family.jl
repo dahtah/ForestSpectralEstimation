@@ -116,7 +116,7 @@ function match_moments(ef :: ExpFamily,μ;tol=1e-4)
 
     res=Optim.optimize(cfun,gfun,Hfun,zeros(length(μ)),Optim.Newton(linesearch=LineSearches.BackTracking()),inplace=false)
     v=Optim.minimizer(res)
-    err = norm(compute_moments(ef,βs(v))[ind]-μ[ind])
+    err = norm(compute_moments(ef,v)-μ)
     if (err > tol)
         error("Could not match moments up to tolerance. Err : $(err)")
     end

@@ -3,7 +3,7 @@ using FastGaussQuadrature,Statistics,Distributions,LegendrePolynomials,LogExpFun
 import LineSearches,OffsetArrays
 
 include("exp_family.jl")
-
+include("jackson_cheb.jl")
 
 include("moments.jl")
 include("markov_bounds.jl")
