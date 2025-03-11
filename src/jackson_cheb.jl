@@ -50,7 +50,7 @@ function estimate_cdf_JCpoly_IS(g::AbstractGraph, λ_grid::AbstractVector, N_rv:
 end
 
 
-function est_k_cheby(L::SparseMatrixCSC{Int64, Int64}, trunc_ind::Int64, random_matrix::Array{Float64}, λmax::Float64)
+function est_k_cheby(L :: AbstractMatrix, trunc_ind:: Integer, random_matrix::AbstractMatrix, λmax)
 
     n = size(L,1)
     N_rv = size(random_matrix,2)
