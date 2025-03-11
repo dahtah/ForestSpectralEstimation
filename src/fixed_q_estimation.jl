@@ -21,7 +21,7 @@ end
 
 #Default bound on λ_max on a graph 
 function bound_lambda(g)
-    2*maximum(degree(g))
+    2*maximum(Graphs.degree(g))
 end
 
 
@@ -44,27 +44,38 @@ function bounds_fixedq(y,a,b)
 end
 
 
-function maxent_fixedq(y,v,a,b;η0=zeros(length(y)))
+function maxent_fixedq(y,v,a,b;η0=zeros(length(y)),method=:alex)
     @assert length(η0) == length(y)
     @assert length(v) == length(y)
 
     #For compatibility with the ExpFamily struct,
     #we need to map our variable from the interval [a,b]
     #to the interval [-1,1]
-    #FIXME: handle this in ExpFamily directly
     m = length(y)
-    tr = (v)-> 2*(v-a)/(b-a) - 1 
-    itr = (x)-> .5*(b-a)*(x+1) + a
-    ef = ExpFamily((v)->[itr(v)^i for i in 1:m])
-    #Find max. entropy estimates 
-    try
-        res=maxent_confidence(ef,y,sqrt.(v),η0=η0)
-        return (prop=expectation(res.ed,(v)-> itr(v) > 0.5),ed=res.ed,status=:success)
-    catch err
-        @info "Caught error in max. entropy computation"
-        showerror(stdout,err)
-        return (prop=NaN,ef=ef,status=:failure)  
+    # tr = (v)-> 2*(v-a)/(b-a) - 1 
+    # itr = (x)-> .5*(b-a)*(x+1) + a
+    if method == :alex
+        ef = ExpFamily((v)->[v^i for i in 1:m],a=a,b=b)
+        try
+            res=maxent_confidence(ef,y,sqrt.(v),η0=η0)
+            return (prop=expectation(res.ed,(v)-> v > 0.5),ed=res.ed,status=:success)
+        catch err
+            @info "Caught error in max. entropy computation"
+            showerror(stdout,err)
+            return (prop=NaN,ef=ef,status=:failure)  
+        end
+    elseif method == :cheb
+        B=mon2cheb(length(y),a,b)
+        yt = (B*[1;y])[2:end]
+        V = (B*Diagonal([0;v])*B')[2:end,2:end]
+        #Q = inv(V)
+
+        ef=ExpFamily((v)->shifted_cheb(v,length(y),a=a,b=b),a=a,b=b)
+        #ed=approx_moment_matching(ef,yt,I(length(yt)),maxit_outer=20,tol=1e-12)
+        ed=approx_moment_matching(ef,yt,V,maxit_outer=100,tol=1e-12)
+        return (prop=expectation(ed,(v)-> v > 0.5),ed=ed,status=:success)
     end
+    #Find max. entropy estimates 
 end
 
 
@@ -92,7 +103,7 @@ function truncate_moments_alex(y,var;a=-1.0,b=1.0)
 end
 
 function default_range(g,ns=30)
-    db=mean(degree(g))
+    db=mean(Graphs.degree(g))
     exp.(range(log(.05*db),log(4*db),ns))
 end
 
@@ -145,6 +156,8 @@ function reconstruct(qs,moments,g;method=:truncate,warm_start=false)
         elseif method == :truncate
             #Alex's method
             yt=truncate_moments_alex(y,v,a=a,b=b)
+        elseif method == :cheb
+            yt=admissible_subset([1;y],a,b)[2:end]
         end
         m = length(yt)
         nm[i] = m
@@ -152,7 +165,12 @@ function reconstruct(qs,moments,g;method=:truncate,warm_start=false)
         δ= up[i]-lw[i]
         if δ > 1e-3
 #            res_me = maxent_fixedq(yt,v[1:m],a,b;η0=η0[1:m])
-            res_me = maxent_fixedq(yt,v[1:m],a,b)
+
+            if method == :cheb
+                res_me = maxent_fixedq(y,v,a,b,method=:cheb)
+            else
+                res_me = maxent_fixedq(yt,v[1:m],a,b,method=:alex)
+            end
             me[i] = res_me.prop
             if isfinite(me[i]) && warm_start
                 η0[1:m] .= res_me.ed.β[1:m]

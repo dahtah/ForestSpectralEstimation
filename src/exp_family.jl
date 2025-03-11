@@ -3,14 +3,14 @@
 
 #FIXME: refactor to support arbitrary domains
 
-#Exponential family wrt to base measure defined by Jacobi density
-#(1-x)^α (1+x)^β on [-1,1] interval
+#Exponential family wrt to base measure defined
+#by uniform density on [a,b]
 struct ExpFamily{T}
     x :: Vector{Float64}
     w :: Vector{Float64}
     S :: Matrix{Float64}
-    α :: Float64
-    β :: Float64
+    a :: Float64
+    b :: Float64
     sfun :: T
 end
 
@@ -18,12 +18,23 @@ function Base.show(io::IO, ef::ExpFamily)
     println(io, "Exponential family with $(nmoments(ef)) moments.")
 end
 
-function ExpFamily(sfun,nq=200;α=0.0,β=0.0,τ=0.0)
-    quad = gaussjacobi(nq,α,β)
-    x = quad[1]
+#map from standard interval [-1,1] to [a,b]
+function inv_map_si(x,a,b)
+    .5*(b-a)*(x+1) + a
+end
+
+#map from [a,b] to [-1,1] 
+function map_si(x,a,b)
+    2*(x-a)/(b-a) - 1
+end
+
+function ExpFamily(sfun;a=-1.0,b=1.0,τ=0.0,nq=200)
+    #    quad = gaussjacobi(nq,α,β)
+    quad = gausslegendre(nq)
+    x = inv_map_si.(quad[1],a,b)
     w = quad[2]/sum(quad[2])
     S = reduce(hcat,map(sfun,x))
-    ExpFamily{typeof(sfun)}(x,w,S',α,β,sfun)
+    ExpFamily{typeof(sfun)}(x,w,S',a,b,sfun)
 end
 
 function nquad(ef::ExpFamily)
@@ -34,13 +45,13 @@ function nmoments(ef::ExpFamily)
     size(ef.S,2)
 end
 
-#base measure as a rescaled Beta density
+
 function distr_base(ef :: ExpFamily)
-    2Beta(ef.β+1,ef.α+1) - 1
+    Uniform(ef.a,ef.b)
 end
 
 function base_pdf(ef :: ExpFamily,x)
-    pdf(distr_base(ef),x)
+    (ef.a <= x <= ef.b ? 1/(ef.b-ef.a) : 0.0)
 end
 
 function base_mean(ef :: ExpFamily)
@@ -77,26 +88,9 @@ function compute_newton_update(ef :: ExpFamily, β,μ)
     m = compute_moments(ef,β)
     W = Diagonal(softmax(ef.S*β + log.(ef.w)))
     R=qr(sqrt(W)*ef.S).R
-    #H=(ef.S' * W * ef.S)# - m*m'
-    #cholesky(Symmetric(compute_var(ef,β)))\( m - μ)
-    #Symmetric(compute_var(ef,β)) \ ( m - μ)
-    #Symmetric(compute_var(ef,β)) \ ( m - μ)
-    #(H-m*m')\(m - μ)
-    #H  = R'*R
-#    c= H\m
-     c = R \ (R' \ m)
-    # a=(inv(H)+(c*c')/(1-dot(m,c)))*(m-μ)
-     b= R \ (R' \ (m-μ)) +  (c*dot(c,m-μ))/(1-dot(m,c))
-    # b
-    #a,b
+    c = R \ (R' \ m)
+    b= R \ (R' \ (m-μ)) +  (c*dot(c,m-μ))/(1-dot(m,c))
 end
-
-#     # W = Diagonal(sqrt.(softmax(ef.S*β + log.(ef.w))))
-#     # qr(W*ef.S).R
-#     #(ef.S' * W * ef.S) - m*m'
-# end
-
-
 
 function compute_entropy(ef::ExpFamily,β)
     f = ef.S*β
@@ -160,11 +154,17 @@ function Distributions.pdf(ed::ExpFamilyDistribution,x)
     exp(logpdf(ed,x))
 end
 
+
 function Distributions.cdf(ed::ExpFamilyDistribution,x)
-    xr = range(-1,1,1000)
-    δ = xr[2]-xr[1]
-    δ*sum((pdf(ed,v) for v in xr if v <= x))
+    quadgk(v->pdf(ed,v),ed.ef.a,x)[1]
 end
+    # function Distributions.cdf(ed::ExpFamilyDistribution,x)
+#     xr = range(ed.ef.a,ed.ef.b,1000)
+#     δ = xr[2]-xr[1]
+#     δ*sum((pdf(ed,v) for v in xr if v <= x))
+# end
+
+
 function Statistics.mean(ed::ExpFamilyDistribution)
     dot(ed.dens .* ed.ef.w,ed.ef.x)
 end
@@ -187,33 +187,20 @@ end
 #Uses Newton's method, stopping when we reach the confidence ball
 function maxent_confidence(ef,μ,std_err;η0 = zeros(length(μ)),step_size=1.0,maxiter=100,max_ls=300)
     m = length(μ)
-    # if η0 != zeros(length(μ))
-    #     @info "Warm-starting"
-    #     @show η0
-    # end
     η = η0
     ind_iter=0
-
     cfun = (v)->logz(ef,v)-dot(v,μ)
-
     while ind_iter < maxiter
         ed=ExpFamilyDistribution(ef;β=η)
         res=(μ-ed.μ) ./ std_err
-#        @show norm(res),cfun(η)
-#        ed=ExpFamilyDistribution(ef,β=zeros(2))
         if norm(res) < 1
             break
         end
-        #g = ed.μ-μ
-        #C=cholesky(Symmetric(cov_ss(ed)))
         α = step_size
-        #δ = C\g
         δ = compute_newton_update(ef,η,μ)
-        #@show norm(δ-δ2)
         c0 = cfun(η)
         ind_ls = 0
         while (cfun(η-α*δ) > c0) && (ind_ls < max_ls)
- #           @show α
             α = .9*α
             ind_ls+=1
         end
@@ -224,4 +211,60 @@ function maxent_confidence(ef,μ,std_err;η0 = zeros(length(μ)),step_size=1.0,m
         ind_iter+=1
     end
     (ed=ExpFamilyDistribution(ef,β=η),niter=ind_iter)
+end
+
+
+function chebpoly(x,n,a=-1,b=1)
+    cos(n*acos(map_si(x,a,b)))
+end
+
+function approx_moment_primal_cost(ef,β,m,α,C)
+    h=compute_entropy(ef,β)
+    r = compute_moments(ef,β) - m
+    -h + (.5/(α)) * (r'*(C\r))
+end
+
+function approx_moment_chi2(ef,β,m,C)
+    r = compute_moments(ef,β) - m
+    (r'*(C\r))
+end
+
+
+function approx_moment_dual_cost(ef,β,m,α,C)
+    logz(ef,β) - dot(m,β) + .5*α*β'*C*β
+end
+
+
+function approx_moment_inner(ef,β,m,α,C)
+    cf = (v)->logz(ef,v) - dot(m,v) + .5*α*v'*C*v
+    gf = (v)->compute_moments(ef,v) - m + α*C*v
+    Hf= (v)->compute_var(ef,v) +α*C
+    #        res=Optim.optimize(cf,gf,β,BFGS(linesearch=LineSearches.BackTracking()),inplace=false,Optim.Options(show_trace=false))
+    res=Optim.optimize(cf,gf,Hf,β,Newton(linesearch=LineSearches.BackTracking()),inplace=false,Optim.Options(show_trace=false))
+
+    res.minimizer
+end
+    
+
+#Implementation of Silver et al. Efficient Maximum Entropy Algorithms for Electronic Structure 
+function approx_moment_matching(ef :: ExpFamily,m,C;maxit_outer=5,tol=1)
+    β=zeros(nmoments(ef))
+    r = compute_moments(ef,β) - m
+    α = 1/(r'*(C\r));
+    it_outer=0
+    @info "Residual $(1/α) at iteration $(it_outer)"
+    while it_outer < maxit_outer
+        β=approx_moment_inner(ef,β,m,α,C)
+        r=compute_moments(ef,β) - m
+        nr=r'*(C\r)
+        @info "Residual $(nr) at iteration $(it_outer)"
+        if (nr < tol)
+            break
+        end
+        α=α/2
+        @show α
+        it_outer += 1
+    end
+    @info "Final residual $(r'*(C\r))"
+    ExpFamilyDistribution(ef,β=β)
 end
