@@ -104,7 +104,7 @@ end
 #Example:
 #g = erdos_renyi(1500,55000)
 #qs=FSE.default_range(g,20)
-#moments = KirchhoffForests.collect_moments_coupled_forests(g, bs.qs, 2, 10, :standard)
+#moments = KirchhoffForests.collect_moments_coupled_forests(g, qs, 2, 10, :standard)
 #ec=FSE.reconstruct_global(qs,moments,g,penalty=:l2).ecdf
 #l = eigvals(Matrix(laplacian_matrix(g)))[2:end]
 #plot(v->ecdf(l)(v),0,2*maximum(degree(g)))
