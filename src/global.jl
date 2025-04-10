@@ -97,6 +97,18 @@ end
 #:l1 => Reconstructed ecdf is piecewise linear
 #:l2 => Reconstructed ecdf is twice differentiable
 #:maxent => Max entropy prior on density
+#Return values
+#ecdf: estimated ECDF
+#x: grid of values from 0 to 2*maximum(degree(g))
+#w: discrete density on grid x 
+#Example:
+#g = erdos_renyi(1500,55000)
+#qs=FSE.default_range(g,20)
+#moments = KirchhoffForests.collect_moments_coupled_forests(g, bs.qs, 2, 10, :standard)
+#ec=FSE.reconstruct_global(qs,moments,g,penalty=:l2).ecdf
+#l = eigvals(Matrix(laplacian_matrix(g)))[2:end]
+#plot(v->ecdf(l)(v),0,2*maximum(degree(g)))
+#plot!(ec,0,2*maximum(degree(g)))
 function reconstruct_global(qs,moments,g;η=10,nq=20,penalty=:l2)
     nm = length(moments[1].y)
     bs=gen_constraint_matrix(g,qs,ng=200,nm=nm)
